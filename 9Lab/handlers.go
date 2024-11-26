@@ -4,9 +4,11 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/golang-jwt/jwt"
 	"log"
 	"net/http"
 	"strconv"
+	"time"
 )
 
 // Обработчики для /users(GET,POST)
@@ -170,4 +172,38 @@ func UserHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-//Функционал 9 лабы
+// Функционал 9 лабы
+func LoginHandler(w http.ResponseWriter, r *http.Request) {
+	var user User
+	err := json.NewDecoder(r.Body).Decode(&user)
+	if err != nil {
+		handleError(w, err, http.StatusBadRequest)
+		return
+	}
+
+	exists, err := findUser(&user)
+	if err != nil {
+		handleError(w, err, http.StatusBadRequest)
+		return
+	}
+	if !exists {
+		handleError(w, fmt.Errorf("user not found"), http.StatusNotFound)
+		return
+	}
+	// Генерация JWT токена
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"email": user.Email,                           // Дополнительные данные
+		"exp":   time.Now().Add(1 * time.Hour).Unix(), // Срок действия токена
+	})
+
+	// Подписываем токен
+	tokenString, err := token.SignedString(jwtSecret)
+	if err != nil {
+		http.Error(w, "Failed to generate token", http.StatusInternalServerError)
+		return
+	}
+
+	// Возвращаем токен клиенту
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(TokenResponse{Token: tokenString})
+}

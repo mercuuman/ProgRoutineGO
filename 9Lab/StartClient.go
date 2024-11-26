@@ -17,6 +17,7 @@ func StartClient() {
 
 	scanner := bufio.NewScanner(os.Stdin)
 	for {
+		fmt.Println("Введите 'login' для того чтобы залогиниться ")
 		//маршруты /users
 		fmt.Println("Введите 'list' для вывода списка юзеров ")
 		fmt.Println("Введите 'IdU' для вывода юзера по id ")
@@ -30,6 +31,8 @@ func StartClient() {
 		command := scanner.Text()
 
 		switch command {
+		case "login":
+			login()
 		case "list": //GET /users
 			listUsers()
 		case "IdU": //GET /users/{id}
@@ -200,6 +203,11 @@ func updateUser() {
 func deleteUser() {
 	var id string
 
+	token, err := getTokenFromFile()
+	if err != nil {
+		log.Fatal("Ошибка при чтении токена:", err)
+	}
+
 	// Запрос id пользователя
 	fmt.Println("Введите id :")
 	fmt.Scanln(&id)
@@ -212,7 +220,7 @@ func deleteUser() {
 	if err != nil {
 		log.Fatal("Ошибка при создании запроса:", err)
 	}
-
+	req.Header.Set("Authorization", "Bearer "+token)
 	// Создание HTTP-клиента
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -229,4 +237,77 @@ func deleteUser() {
 
 	// Вывод ответа сервера
 	fmt.Printf("Ответ сервера: %s\n", body)
+}
+func login() {
+	var email, password, name string
+
+	fmt.Println("Введите вашюзернейм:")
+	fmt.Scanln(&name)
+
+	fmt.Println("Введите ваш пароль:")
+	fmt.Scanln(&password)
+
+	// Формируем JSON-запрос
+	user := User{
+		Email:    email,
+		Password: password,
+		Name:     name,
+	}
+	jsonData, err := json.Marshal(user)
+	if err != nil {
+		log.Fatal("Ошибка при преобразовании данных в JSON:", err)
+	}
+
+	// Отправляем POST-запрос
+	resp, err := http.Post("http://localhost:8090/login", "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		log.Fatal("Ошибка при отправке запроса:", err)
+	}
+	defer resp.Body.Close()
+
+	// Читаем ответ сервера
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal("Ошибка при чтении ответа:", err)
+	}
+
+	// Проверяем статус ответа
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Ошибка авторизации: %s\n", string(body))
+		return
+	}
+
+	// Извлекаем токен из ответа
+	var response map[string]string
+	err = json.Unmarshal(body, &response)
+	if err != nil {
+		fmt.Println("Ошибка парсинга JSON:", err)
+		return
+	}
+
+	token, ok := response["token"]
+	if !ok {
+		fmt.Println("Ответ не содержит токен.")
+		return
+	}
+
+	// Сохраняем токен
+	err = saveTokenToFile(token)
+	if err != nil {
+		log.Println("Не удалось сохранить токен:", err)
+	} else {
+		fmt.Println("Токен сохранён в session.txt")
+	}
+
+	fmt.Println("Авторизация успешна!")
+}
+func saveTokenToFile(token string) error {
+	return ioutil.WriteFile("session.txt", []byte(token), 0644)
+}
+func getTokenFromFile() (string, error) {
+	data, err := ioutil.ReadFile("session.txt")
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }

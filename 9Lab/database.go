@@ -86,3 +86,17 @@ func deleteUserFromDB(id int) error {
 	_, err := db.Exec(query, id)
 	return err
 }
+
+// 9 лаба
+// по данным юзера ищем в базе
+func findUser(user *User) (bool, error) {
+	query := "SELECT EXISTS (SELECT 1 FROM users WHERE name = $1  AND password = $2)"
+	var exists bool
+	err := db.QueryRow(query, user.Name, user.Password).Scan(&exists)
+	if err != nil {
+		return false, err
+
+	}
+
+	return exists, nil
+}

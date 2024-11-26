@@ -11,9 +11,16 @@ func StartServer() {
 	mux := http.NewServeMux()
 	//обработка маршрутов для users(GET,POST(json))
 	mux.HandleFunc("/users", UsersHandler)
-	//обработка маршрутов для users/(GET,PUT(json)),DELETE
-	mux.HandleFunc("/users/", UserHandler)
-
+	//обработка маршрутов для users/(GET,PUT(json)),DELETE+middleware+token
+	//mux.HandleFunc("/users/", UserHandler)
+	mux.Handle("/users/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			AuthMiddleware(http.HandlerFunc(UserHandler)).ServeHTTP(w, r)
+		} else {
+			UserHandler(w, r)
+		}
+	}))
+	mux.Handle("/login", http.HandlerFunc(LoginHandler))
 	handlerWithCORS := corsMiddleware(mux)
 	log.Println("Server is running on http://localhost:8090")
 	if err := http.ListenAndServe(":8090", handlerWithCORS); err != nil {
